@@ -20,6 +20,7 @@ local NetworkMethod = "BodyVelocity" -- "BodyVelocity", "CFrame", or "Humanoid"
 
 local MainUI
 local MainFrame
+local GuiVisible = true
 
 -- DIFFERENT FLY METHODS FOR VISIBILITY
 
@@ -114,8 +115,14 @@ local function MaintainNoClip()
 	end
 end
 
+-- TOGGLE GUI FUNCTION
+local function toggleGUI()
+	GuiVisible = not GuiVisible
+	if MainFrame then
+		MainFrame.Visible = GuiVisible
+	end
+end
 -- GUI BUILDER
-local function buildMainGUI()
 	if MainUI then MainUI:Destroy() end
 
 	MainUI = Instance.new("ScreenGui")
@@ -136,12 +143,12 @@ local function buildMainGUI()
 	corner.CornerRadius = UDim.new(0, 8)
 	corner.Parent = MainFrame
 
-	-- Title
+	-- Title (Draggable)
 	local title = Instance.new("TextLabel")
 	title.Size = UDim2.new(1, 0, 0, 35)
 	title.Position = UDim2.new(0, 0, 0, 0)
 	title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-	title.Text = "🚀 Enhanced Fly & NoClip"
+	title.Text = "🚀 Enhanced Fly & NoClip [Drag Me]"
 	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = Enum.Font.GothamBold
 	title.TextSize = 14
@@ -150,6 +157,45 @@ local function buildMainGUI()
 	local titleCorner = Instance.new("UICorner")
 	titleCorner.CornerRadius = UDim.new(0, 8)
 	titleCorner.Parent = title
+
+	-- Make GUI Draggable
+	local dragging = false
+	local dragStart = nil
+	local startPos = nil
+
+	title.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = MainFrame.Position
+		end
+	end)
+
+	title.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			if dragging then
+				local delta = input.Position - dragStart
+				MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+			end
+		end
+	end)
+
+	title.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+
+	-- Hover effect for title
+	title.MouseEnter:Connect(function()
+		title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+		title.Text = "🚀 Enhanced Fly & NoClip [Dragging...]"
+	end)
+
+	title.MouseLeave:Connect(function()
+		title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+		title.Text = "🚀 Enhanced Fly & NoClip [Drag Me]"
+	end)
 
 	-- Method Selection
 	local methodSection = Instance.new("Frame")
@@ -405,6 +451,8 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 	elseif input.KeyCode == Enum.KeyCode.N then
 		NoClipping = not NoClipping
 		if NoClipping then StartNoClip() else StopNoClip() end
+	elseif input.KeyCode == Enum.KeyCode.G then
+		toggleGUI()
 	end
 end)
 
@@ -467,7 +515,9 @@ print("Enhanced Fly & NoClip Script Loaded!")
 print("Controls:")
 print("F - Toggle Fly")
 print("N - Toggle NoClip")
+print("G - Toggle GUI (Show/Hide)")
 print("WASD - Movement, Space - Up, Ctrl - Down")
+print("Drag title bar to move GUI")
 print("Try different network methods for visibility:")
 print("- Body: Smoothest (client-side)")
 print("- CFrame: More visible to others")
