@@ -5,6 +5,7 @@ local CoreGui = game:GetService("CoreGui")
 
 local Player = Players.LocalPlayer
 local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 local Flying = false
@@ -14,11 +15,16 @@ local BodyGyro = nil
 local BodyVelocity = nil
 local OriginalCanCollide = {}
 
-local MainUI -- referensi global biar bisa di-update
+-- Network method variables
+local NetworkMethod = "BodyVelocity" -- "BodyVelocity", "CFrame", or "Humanoid"
+
+local MainUI
 local MainFrame
 
--- FLY FUNCTIONS
-local function StartFlying()
+-- DIFFERENT FLY METHODS FOR VISIBILITY
+
+-- Method 1: BodyVelocity (Local only, smoothest)
+local function StartFlyingBodyVelocity()
 	if not BodyGyro then
 		BodyGyro = Instance.new("BodyGyro")
 		BodyGyro.P = 9e4
@@ -34,9 +40,43 @@ local function StartFlying()
 	end
 end
 
+-- Method 2: CFrame (More visible to others)
+local function StartFlyingCFrame()
+	-- Disable default physics
+	if Humanoid then
+		Humanoid.PlatformStand = true
+	end
+end
+
+-- Method 3: Humanoid (Most compatible)
+local function StartFlyingHumanoid()
+	if Humanoid then
+		Humanoid.PlatformStand = true
+	end
+	if not BodyVelocity then
+		BodyVelocity = Instance.new("BodyVelocity")
+		BodyVelocity.Velocity = Vector3.zero
+		BodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+		BodyVelocity.Parent = HumanoidRootPart
+	end
+end
+
+local function StartFlying()
+	if NetworkMethod == "BodyVelocity" then
+		StartFlyingBodyVelocity()
+	elseif NetworkMethod == "CFrame" then
+		StartFlyingCFrame()
+	elseif NetworkMethod == "Humanoid" then
+		StartFlyingHumanoid()
+	end
+end
+
 local function StopFlying()
 	if BodyGyro then BodyGyro:Destroy(); BodyGyro = nil end
 	if BodyVelocity then BodyVelocity:Destroy(); BodyVelocity = nil end
+	if Humanoid then
+		Humanoid.PlatformStand = false
+	end
 end
 
 -- NOCLIP FUNCTIONS
@@ -64,7 +104,6 @@ local function StopNoClip()
 	end
 end
 
--- Maintain noclip during runtime
 local function MaintainNoClip()
 	if NoClipping and Character then
 		for _, part in pairs(Character:GetChildren()) do
@@ -86,14 +125,13 @@ local function buildMainGUI()
 
 	-- Main Frame
 	MainFrame = Instance.new("Frame")
-	MainFrame.Size = UDim2.new(0, 280, 0, 200)
-	MainFrame.Position = UDim2.new(0.02, 0, 0.3, 0)
+	MainFrame.Size = UDim2.new(0, 300, 0, 280)
+	MainFrame.Position = UDim2.new(0.02, 0, 0.25, 0)
 	MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 	MainFrame.BackgroundTransparency = 0.1
 	MainFrame.BorderSizePixel = 0
 	MainFrame.Parent = MainUI
 	
-	-- Corner rounding
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 8)
 	corner.Parent = MainFrame
@@ -103,7 +141,7 @@ local function buildMainGUI()
 	title.Size = UDim2.new(1, 0, 0, 35)
 	title.Position = UDim2.new(0, 0, 0, 0)
 	title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-	title.Text = "🚀 Fly & NoClip Control"
+	title.Text = "🚀 Enhanced Fly & NoClip"
 	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = Enum.Font.GothamBold
 	title.TextSize = 14
@@ -113,10 +151,86 @@ local function buildMainGUI()
 	titleCorner.CornerRadius = UDim.new(0, 8)
 	titleCorner.Parent = title
 
+	-- Method Selection
+	local methodSection = Instance.new("Frame")
+	methodSection.Size = UDim2.new(1, -10, 0, 60)
+	methodSection.Position = UDim2.new(0, 5, 0, 40)
+	methodSection.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+	methodSection.BackgroundTransparency = 0.3
+	methodSection.BorderSizePixel = 0
+	methodSection.Parent = MainFrame
+	
+	local methodCorner = Instance.new("UICorner")
+	methodCorner.CornerRadius = UDim.new(0, 6)
+	methodCorner.Parent = methodSection
+
+	local methodLabel = Instance.new("TextLabel")
+	methodLabel.Size = UDim2.new(1, 0, 0, 20)
+	methodLabel.Position = UDim2.new(0, 0, 0, 5)
+	methodLabel.BackgroundTransparency = 1
+	methodLabel.Text = "🌐 Network Method (Visibility)"
+	methodLabel.TextColor3 = Color3.new(1, 1, 1)
+	methodLabel.Font = Enum.Font.Gotham
+	methodLabel.TextSize = 11
+	methodLabel.Parent = methodSection
+
+	-- Method Buttons Container
+	local methodButtons = Instance.new("Frame")
+	methodButtons.Size = UDim2.new(1, -10, 0, 30)
+	methodButtons.Position = UDim2.new(0, 5, 0, 25)
+	methodButtons.BackgroundTransparency = 1
+	methodButtons.Parent = methodSection
+
+	local methodLayout = Instance.new("UIListLayout")
+	methodLayout.FillDirection = Enum.FillDirection.Horizontal
+	methodLayout.Padding = UDim.new(0, 3)
+	methodLayout.Parent = methodButtons
+
+	-- Method Selection Buttons
+	local methods = {
+		{name = "Body", method = "BodyVelocity", desc = "Smooth"},
+		{name = "CFrame", method = "CFrame", desc = "Visible"},
+		{name = "Humanoid", method = "Humanoid", desc = "Compatible"}
+	}
+
+	local methodBtns = {}
+	for i, methodData in ipairs(methods) do
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(0.33, -2, 1, 0)
+		btn.BackgroundColor3 = methodData.method == NetworkMethod and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(60, 60, 60)
+		btn.Text = methodData.name
+		btn.TextColor3 = Color3.new(1, 1, 1)
+		btn.Font = Enum.Font.Gotham
+		btn.TextSize = 10
+		btn.BorderSizePixel = 0
+		btn.Parent = methodButtons
+		
+		local btnCorner = Instance.new("UICorner")
+		btnCorner.CornerRadius = UDim.new(0, 4)
+		btnCorner.Parent = btn
+
+		methodBtns[methodData.method] = btn
+
+		btn.MouseButton1Click:Connect(function()
+			-- Update selection
+			for method, button in pairs(methodBtns) do
+				button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+			end
+			btn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+			NetworkMethod = methodData.method
+			
+			-- Restart flying if active
+			if Flying then
+				StopFlying()
+				StartFlying()
+			end
+		end)
+	end
+
 	-- Speed Control Section
 	local speedSection = Instance.new("Frame")
 	speedSection.Size = UDim2.new(1, -10, 0, 80)
-	speedSection.Position = UDim2.new(0, 5, 0, 40)
+	speedSection.Position = UDim2.new(0, 5, 0, 105)
 	speedSection.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 	speedSection.BackgroundTransparency = 0.3
 	speedSection.BorderSizePixel = 0
@@ -198,7 +312,7 @@ local function buildMainGUI()
 	-- NoClip Control Section
 	local noclipSection = Instance.new("Frame")
 	noclipSection.Size = UDim2.new(1, -10, 0, 70)
-	noclipSection.Position = UDim2.new(0, 5, 0, 125)
+	noclipSection.Position = UDim2.new(0, 5, 0, 190)
 	noclipSection.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 	noclipSection.BackgroundTransparency = 0.3
 	noclipSection.BorderSizePixel = 0
@@ -280,23 +394,6 @@ local function buildMainGUI()
 			noclipStatus.TextColor3 = Color3.fromRGB(150, 150, 150)
 		end
 	end)
-
-	-- Hover effects
-	noclipButton.MouseEnter:Connect(function()
-		if NoClipping then
-			noclipButton.BackgroundColor3 = Color3.fromRGB(0, 180, 60)
-		else
-			noclipButton.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
-		end
-	end)
-
-	noclipButton.MouseLeave:Connect(function()
-		if NoClipping then
-			noclipButton.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
-		else
-			noclipButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-		end
-	end)
 end
 
 -- INPUT CONTROL
@@ -307,30 +404,18 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 		if Flying then StartFlying() else StopFlying() end
 	elseif input.KeyCode == Enum.KeyCode.N then
 		NoClipping = not NoClipping
-		if NoClipping then
-			StartNoClip()
-		else
-			StopNoClip()
-		end
-		-- Update GUI button if exists
-		local noclipButton = MainFrame and MainFrame:FindFirstChild("Frame") and MainFrame.Frame:FindFirstChild("TextButton")
-		if noclipButton then
-			if NoClipping then
-				noclipButton.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
-				noclipButton.Text = "✅ NoClip: ON"
-			else
-				noclipButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-				noclipButton.Text = "🚫 NoClip: OFF"
-			end
-		end
+		if NoClipping then StartNoClip() else StopNoClip() end
 	end
 end)
 
 -- FLY MOTION
+local lastCFrame = nil
 RunService.RenderStepped:Connect(function()
-	if Flying and BodyVelocity and BodyGyro then
+	if Flying then
 		local cam = workspace.CurrentCamera
 		local moveVec = Vector3.zero
+		
+		-- Get movement input
 		if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveVec += cam.CFrame.LookVector end
 		if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveVec -= cam.CFrame.LookVector end
 		if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveVec -= cam.CFrame.RightVector end
@@ -338,8 +423,25 @@ RunService.RenderStepped:Connect(function()
 		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveVec += Vector3.new(0, 1, 0) end
 		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveVec -= Vector3.new(0, 1, 0) end
 
-		BodyVelocity.Velocity = moveVec.Magnitude > 0 and moveVec.Unit * Speed or Vector3.zero
-		BodyGyro.CFrame = cam.CFrame
+		-- Apply movement based on method
+		if NetworkMethod == "BodyVelocity" then
+			if BodyVelocity and BodyGyro then
+				BodyVelocity.Velocity = moveVec.Magnitude > 0 and moveVec.Unit * Speed or Vector3.zero
+				BodyGyro.CFrame = cam.CFrame
+			end
+		elseif NetworkMethod == "CFrame" then
+			if moveVec.Magnitude > 0 then
+				local newPos = HumanoidRootPart.Position + (moveVec.Unit * Speed * RunService.RenderStepped:Wait())
+				HumanoidRootPart.CFrame = CFrame.new(newPos, newPos + cam.CFrame.LookVector)
+			end
+		elseif NetworkMethod == "Humanoid" then
+			if BodyVelocity then
+				BodyVelocity.Velocity = moveVec.Magnitude > 0 and moveVec.Unit * Speed or Vector3.zero
+			end
+			if moveVec.Magnitude > 0 then
+				HumanoidRootPart.CFrame = CFrame.new(HumanoidRootPart.Position, HumanoidRootPart.Position + cam.CFrame.LookVector)
+			end
+		end
 	end
 	
 	-- Maintain noclip
@@ -349,6 +451,7 @@ end)
 -- Handle character respawn
 Player.CharacterAdded:Connect(function(newCharacter)
 	Character = newCharacter
+	Humanoid = Character:WaitForChild("Humanoid")
 	HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 	Flying = false
 	NoClipping = false
@@ -360,10 +463,12 @@ end)
 -- INIT GUI
 buildMainGUI()
 
-print("Fly & NoClip Script Loaded!")
+print("Enhanced Fly & NoClip Script Loaded!")
 print("Controls:")
 print("F - Toggle Fly")
 print("N - Toggle NoClip")
-print("WASD - Movement (when flying)")
-print("Space - Up, Left Ctrl - Down")
-print("Drag slider to adjust fly speed (1-100)")
+print("WASD - Movement, Space - Up, Ctrl - Down")
+print("Try different network methods for visibility:")
+print("- Body: Smoothest (client-side)")
+print("- CFrame: More visible to others")
+print("- Humanoid: Most compatible")
